@@ -851,6 +851,42 @@ def pageNotifications() {
 // Show "Remote Control Options" page
 def pageRemoteOptions() {
     LOG("pageRemoteOptions()")
+    
+    def helpSwitch =
+        "You can arm and disarm Smart Alarm using physical/virtual " +
+        "momentary buttons (for integration with other SmartApps)"
+        
+    def inputSwitchStay = [
+        name:       "switchesStay",
+        type:       "capability.switch",
+        title:      "Switch for Stay",
+        multiple:   false,
+        required:   false
+    ]
+    
+    def inputSwitchAway = [
+        name:       "switchesAway",
+        type:       "capability.switch",
+        title:      "Switch for Away",
+        multiple:   false,
+        required:   false
+    ]
+    
+    def inputSwitchDisarm = [
+        name:       "switchesDisarm",
+        type:       "capability.switch",
+        title:      "Switch for Disarm",
+        multiple:   false,
+        required:   false
+    ]
+    
+    def inputSwitchPanic = [
+        name:       "switchesPanic",
+        type:       "capability.switch",
+        title:      "Switch for Panic",
+        multiple:   false,
+        required:   false
+    ]
 
     def helpRemote =
         "You can arm and disarm Smart Alarm using any compatible remote " +
@@ -932,6 +968,14 @@ def pageRemoteOptions() {
     ]
 
     return dynamicPage(pageProperties) {
+        section("Button Control Options") {
+            paragraph helpSwitch
+            input inputSwitchStay
+            input inputSwitchAway
+            input inputSwitchDisarm
+            input inputSwitchPanic
+        }
+        
         section("Remote Control Options") {
             paragraph helpRemote
             input inputRemotes
@@ -1082,8 +1126,29 @@ private def initialize() {
     initButtons()
     initRestApi()
     subscribe(location, onLocation)
+    subscribe(location, "alarmSystemStatus", onAlarmSystemStatus)
+    subscribe(switchesStay, "switch.on", switchesStayHandler)
+    subscribe(switchesAway, "switch.on", switchesAwayHandler)
+    subscribe(switchesDisarm, "switch.on", switchesDisarmHandler)
+    subscribe(switchesPanic, "switch.on", switchesPanicHandler)
 
     STATE()
+}
+
+def switchesStayHandler(evt) {
+  armStay()
+}
+
+def switchesAwayHandler(evt) {
+  armAway()
+}
+
+def switchesDisarmHandler(evt) {
+  disarm()
+}
+
+def switchesPanicHandler(evt) {
+  panic()
 }
 
 private def clearAlarm() {
@@ -1358,8 +1423,10 @@ def reset() {
     if (state.armed) {
         msg += "ARMED "
         msg += state.stay ? "STAY" : "AWAY"
+        setAlarmMode((state.stay ? "Stay" : "Away"))
     } else {
         msg += "DISARMED."
+        setAlarmMode("Off")
     }
 
     notify(msg)
@@ -1389,6 +1456,7 @@ def exitDelayExpired() {
         msg += "exterior "
     }
     msg += "zones are armed."
+    setAlarmMode((stay ? "Stay" : "Away"))
 
     notify(msg)
 }
@@ -1435,6 +1503,7 @@ private def armPanel(stay) {
         msg += "will arm ${mode} in ${state.delay} seconds."
     } else {
         msg += "is ARMED ${mode}."
+        setAlarmMode((stay ? "Stay" : "Away"))
     }
 
     notify(msg)
@@ -1849,4 +1918,28 @@ private def LOG(message) {
 
 private def STATE() {
     //log.trace "state: ${state}"
+}
+
+def onAlarmSystemStatus(evt) {
+    LOG("Alarm System Status has been changed to '${evt.value}'")
+    String mode = evt.value.toLowerCase()
+    if (mode == "away") {
+        armAway()
+    } else if (mode == "stay") {
+        armStay()
+    } else if (mode == "off") {
+        disarm()
+    }
+}
+
+def setAlarmMode(name) {
+    LOG("Alarm System Status will be set to '${name}'")
+    def event = [
+        name:           "alarmSystemStatus",
+        value:          name,
+        isStateChange:  true,
+        displayed:      true,
+        description:    "alarm system status is ${name}",
+    ]
+    sendLocationEvent(event)
 }
